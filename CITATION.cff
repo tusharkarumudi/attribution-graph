@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: "attribution-graph: evidence-ranked entity resolution for attribution investigations"
+message: "If you use this software or the method it implements, please cite it."
+type: software
+authors:
+  - family-names: Karumudi
+    # Add your ORCID before release; it makes the work
+    # machine-linkable to you across citation systems.
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+    given-names: Tushar
+repository-code: "https://github.com/tusharkarumudi/attribution-graph"
+abstract: >-
+  A log-likelihood-ratio evidence model for deciding whether observed
+  identifiers denote the same real-world entity. Evidence weight is derived
+  from measured corpus selectivity rather than hand-tuned weights; correlated
+  observations are deduplicated by correlation group; and a group cap set below
+  the prior enforces corroboration structurally rather than by convention.
+  Includes per-predicate temporal decay, must-not-link constraints for
+  inter-entity relations, and ICD 203 estimative reporting.
+keywords:
+  - open source intelligence
+  - entity resolution
+  - record linkage
+  - attribution
+  - threat intelligence
+license: Apache-2.0
+version: 2.0.0

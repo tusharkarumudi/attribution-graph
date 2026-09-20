@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "attribution-graph"
+version = "2.0.0"
+description = "Evidence-strength scoring for entity-attribution investigations"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Tushar Karumudi" }]
+keywords = ["osint", "attribution", "entity-resolution", "threat-intelligence",
+            "followthemoney", "record-linkage"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Information Technology",
+  "Topic :: Security",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+screenshots = ["playwright>=1.40"]   # then: playwright install chromium
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.6", "mypy>=1.11"]
+
+[project.urls]
+Homepage = "https://github.com/tusharkarumudi/attribution-graph"
+Documentation = "https://github.com/tusharkarumudi/attribution-graph/blob/main/METHOD.md"
+Issues = "https://github.com/tusharkarumudi/attribution-graph/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/attribution_graph"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["B008", "UP017"]  # UP017: timezone.utc reads clearer than the UTC alias
+
+[tool.pytest.ini_options]
+# Explicit taxonomy. A developer should not need implicit environmental
+# knowledge to make `pytest` green: network and browser tests fail on a
+# machine without DNS or Chromium, and that is an environment fact rather
+# than a defect.
+#
+#   pytest                      # deterministic subset, the release gate
+#   pytest -m network           # needs outbound DNS/HTTP
+#   pytest -m browser           # needs a headless browser
+testpaths = ["tests"]
+markers = [
+    "network: requires outbound network access",
+    "browser: requires a headless browser (playwright/chromium)",
+    "integration: spans more than one package",
+    "adversarial: injection, obfuscation and SSRF regressions",
+    "slow: takes more than a second",
+]
+addopts = "-m 'not network and not browser'"
