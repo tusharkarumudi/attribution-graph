@@ -1,0 +1,213 @@
+# Calibration protocol
+
+How to establish a measured error rate for the scoring model, and how to report
+it without overstating what was measured.
+
+This is the top open item in `METHOD.md §7`. Until it is done, every probability
+this library emits is an ordering dressed as a measurement.
+
+---
+
+## 0. Why it matters twice
+
+**Scientifically:** the model is principled but unfitted. The prior, the group
+cap, the half-lives and the band edges are all defensible choices, and none of
+them has been checked against outcomes. "Principled but unvalidated" is an
+honest description and a weak one.
+
+**Legally:** if the confidence figures ever appear in a filing, they are opinion
+evidence. In US federal practice that engages FRE 702 and the *Daubert* factors,
+of which **known or potential error rate** is one. A method with no measured
+error rate is close to the paradigm case for exclusion. This protocol exists to
+produce that number.
+
+Nothing here is legal advice, and what a court accepts is a judgment for counsel.
+
+---
+
+## 1. Ground truth
+
+The single hardest part, and the part that determines whether the whole exercise
+means anything.
+
+### The independence requirement
+
+**A label must rest on evidence the model did not use.** A pair the model linked,
+which an analyst then confirmed by re-reading the same sources, is not a label —
+it is the model grading its own homework, and it will produce a beautiful,
+meaningless calibration curve.
+
+Every `LabelledPair` carries `label_source` for this reason. Record it honestly.
+
+### Where independent labels come from
+
+| Source | Strength | Notes |
+|---|---|---|
+| **Self-labelling registry chains** | Strongest | GLEIF's `registeredAs` maps an LEI to a national company number. The registry asserts the identity, so the pair is labelled by definition. Thousands available at zero cost. |
+| **Adversarial admission** | Strongest | Closed enforcement cases where the operator confirmed control, or a court found it. Rare and precious. |
+| **Legal process outcomes** | Strong | Subpoena returns, platform disclosures, regulatory findings that name an operator. |
+| **Corporate filings naming both** | Strong | A 10-K listing subsidiaries labels every parent/child pair in it. |
+| **Merger and acquisition records** | Strong | Post-acquisition, two brands are one entity by public record. |
+| **Analyst adjudication with fresh evidence** | Moderate | Two analysts independently investigate using sources the model did not touch. Record inter-rater agreement. |
+| **Model output confirmed by re-reading model sources** | **Unusable** | Circular. Excluded. |
+
+### Negatives are the expensive half
+
+Positives are easy — chase a known chain. Negatives are where studies cut corners
+and invalidate themselves.
+
+Three kinds, and you need all three:
+
+1. **Random negatives.** Sample identifier pairs uniformly from the corpus. Almost
+   all are trivially negative. Boring, and necessary: they are what makes the
+   prevalence correction valid.
+2. **Blocked negatives.** Pairs that survived blocking — same root name, same
+   country, same industry — but are confirmed distinct entities. These are what
+   the model actually sees in production.
+3. **Hard negatives.** Deliberately adversarial: two genuinely unrelated companies
+   with near-identical names; a shared registered-agent address; two sites on one
+   CDN IP; a franchisee and a franchisor; a shell and its unrelated namesake in
+   another jurisdiction.
+
+**If you label only hard negatives, prevalence correction becomes invalid** — it
+assumes negatives were drawn representatively. Label all three and record the
+proportions.
+
+### Target size
+
+| Pairs | What it supports |
+|---:|---|
+| 200 | Directional only. Reliability diagram with wide error bars. Enough to detect gross miscalibration. |
+| 500 | Publishable minimum. Platt scaling. Band-level precision with ±10% intervals. |
+| 1,500 | Isotonic recalibration. Per-predicate ablation becomes meaningful. |
+| 5,000+ | Per-jurisdiction and per-evidence-type breakdowns. |
+
+**Start at 500.** It is achievable in a few weeks against GLEIF chains plus your
+own closed cases, and it is enough for a paper and a defensible error rate.
+
+---
+
+## 2. Avoiding the two traps
+
+### Trap 1 — prevalence
+
+You will label a set that is perhaps 30–50% positive, because nobody hand-labels
+10,000 negatives to find three positives. Operationally the base rate is around
+1e-5.
+
+A model measured at 40% prevalence and deployed at 0.001% will look far better in
+the lab. The gap is not marginal; it is orders of magnitude in precision.
+
+`band_performance()` reports both `precision_in_sample` and
+`precision_at_operational_prevalence`. **Quote the second.** Any precision figure
+published without its prevalence assumption is not a claim anyone can check.
+
+Estimate your operational prevalence rather than guessing: over a representative
+case, count candidate pairs generated by blocking and divide by the number that
+were genuinely the same entity.
+
+### Trap 2 — leakage
+
+Pairs from one investigation are not independent. They share sources, evidence
+and often the same underlying entity. Split at the **case** level:
+
+```python
+train, test = split_by_case(pairs, test_fraction=0.3, seed=7)
+```
+
+Splitting at the pair level lets the same facts appear on both sides and produces
+an accuracy figure that will not survive a new case.
+
+---
+
+## 3. Procedure
+
+```
+1. Assemble corpus       ->  labelled_pairs.json
+2. Estimate operational prevalence from a representative case
+3. Split by case         ->  train / test
+4. Measure on TEST, uncorrected     (baseline: is it already calibrated?)
+5. Fit recalibration on TRAIN       (Platt <1000 pairs, isotonic above)
+6. Re-measure on TEST               (did it improve, or just move?)
+7. Ablate per evidence type on TRAIN
+8. Publish the reliability diagram, ECE, Brier decomposition, band precision
+```
+
+```bash
+python -m attribution_graph.calibrate report \
+    --corpus labelled_pairs.json \
+    --operational-prevalence 1e-5 \
+    --out calibration_report.md
+```
+
+### What to do with the result
+
+- **ECE below ~0.05 and band precisions plausible** → publish as-is. The model is
+  calibrated and you have a measured error rate.
+- **Systematic over-confidence** → most likely the prior is too high or
+  `GROUP_CAP` too permissive. Fit Platt, re-measure, and report both raw and
+  recalibrated figures rather than silently shipping the corrected version.
+- **Good calibration, poor resolution** → the model is honest but not
+  discriminating. That points at selectivity counts, not at the scoring maths:
+  an in-memory index makes everything look unique. Fix the corpus first.
+- **Band precisions wildly off between bands** → the band edges are wrong, which
+  is a much easier fix than the model.
+
+### Ablation
+
+Re-run with one predicate class zeroed at a time, on TRAIN only. This answers
+which evidence types are mis-weighted, and it is the most publishable secondary
+result — *"shared analytics IDs contributed 60% of correct attributions and 4% of
+incorrect ones"* is a finding other practitioners can act on immediately.
+
+---
+
+## 4. Reporting honestly
+
+Publish all of:
+
+- Sample size, and the count of each label source
+- Sample prevalence **and** assumed operational prevalence
+- Reliability diagram, ECE, MCE
+- Brier score with its decomposition (reliability, resolution, uncertainty)
+- Per-band precision at operational prevalence, with confidence intervals
+- Whether figures are raw or recalibrated, and which method
+- Negative composition: how many random, blocked, hard
+
+Do not publish a single accuracy number. Do not publish AUC as the headline — it
+is prevalence-insensitive, which sounds like a virtue and here hides the exact
+thing that matters. Do not quietly drop the bins with few samples.
+
+State the limitations that remain: the corpus is drawn from one analyst's case
+population, label quality varies by source, and calibration on corporate entities
+may not transfer to personas.
+
+---
+
+## 5. Keeping it true
+
+Calibration decays. Sources change coverage, adversaries adapt, the corpus grows
+and shifts selectivity counts underneath the model.
+
+- Re-run on every minor release, and gate releases on ECE not regressing.
+- Add each closed case to the corpus as it closes. This is nearly free if it
+  becomes a habit and impossible to reconstruct later.
+- Version the corpus alongside the model. A calibration figure is only meaningful
+  paired with the model version and corpus snapshot that produced it.
+- Record the calibration report's own hash in the evidence manifest when a run's
+  scores are being relied on, so a reader can tell which validation applied.
+
+---
+
+## 6. Definition of done
+
+- [ ] ≥500 labelled pairs, ≥3 independent label sources, all three negative kinds
+- [ ] Operational prevalence estimated from real data rather than assumed
+- [ ] Case-level split, no pair-level leakage
+- [ ] Reliability diagram, ECE, Brier decomposition, per-band precision on held-out test
+- [ ] Recalibration fitted and evaluated, raw and corrected both reported
+- [ ] Per-predicate ablation
+- [ ] `METHOD.md §7` rewritten from "not calibrated" to the measured figures
+- [ ] README status line updated: probabilities become measurements, not orderings
+- [ ] Corpus versioned, CI gate on ECE regression
+- [ ] Preprint drafted from the result (see `paper/`)
