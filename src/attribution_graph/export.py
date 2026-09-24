@@ -35,6 +35,25 @@ FTM_PROP = {
 }
 
 
+def _account_relationships(graph) -> dict[str, set[str]]:
+    """seller_id key -> the DIRECT/RESELLER labels it was declared under.
+
+    ads.txt records this and nothing downstream used it, so an entity reached
+    only through a RESELLER line -- an ad system reselling somebody else's
+    inventory -- was listed beside the subject as though it were a party to it.
+    """
+    out: dict[str, set[str]] = {}
+    for c in getattr(graph, "claims", ()) or ():
+        rel = str((getattr(c, "raw", None) or {}).get("relationship") or "").upper()
+        if rel not in ("DIRECT", "RESELLER"):
+            continue
+        for side in (getattr(c, "subject", None), getattr(c, "object", None)):
+            key = getattr(side, "key", None) or getattr(side, "value", None)
+            if key and str(key).startswith("seller_id:"):
+                out.setdefault(str(key), set()).add(rel)
+    return out
+
+
 def _mask_attributes(attrs: dict, salt: bytes | None) -> dict:
     """Recursively mask entity attributes.
 
@@ -342,13 +361,21 @@ def report(
         "",
     ]
 
+    rels = _account_relationships(graph)
     for e in sorted(graph.entities.values(), key=lambda x: -x.log_odds):
         if len(e.identifiers) < 2:
             continue
         L.append(f"### {_md(e.best_label)}  ({e.type.value})")
         L.append("")
+        labels = {r for i in e.identifiers for r in rels.get(str(i.key), set())}
+        if labels and "DIRECT" not in labels:
+            L.append("> Reached only through RESELLER declarations: an ad system "
+                     "reselling\n> inventory sold by someone else. Not a declared "
+                     "party to the subject.")
+            L.append("")
         for i in sorted(e.identifiers, key=lambda x: x.key):
-            L.append(f"- `{i.key}`")
+            tag = "/".join(sorted(rels.get(str(i.key), ()))) if rels.get(str(i.key)) else ""
+            L.append(f"- `{i.key}`" + (f"  — {tag}" if tag else ""))
         if _mask_attributes(e.attributes, salt):
             L.append("")
             for k, v in _mask_attributes(e.attributes, salt).items():

@@ -6,6 +6,14 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-09-24
+
+- Resolved entities carry the DIRECT/RESELLER label of the accounts that
+  reached them, and an entity reached ONLY through RESELLER declarations says
+  so. `openx.com,537153564,RESELLER` under a publisher's `## Undertone ##` block
+  is OpenX reselling Undertone's inventory; its legal entity was listed flat
+  beside the subject, implying a connection the ads.txt explicitly denies.
+
 ## [2.0.2] - 2026-09-24
 
 - Minimisation replaces values at token boundaries, not as bare substrings.
