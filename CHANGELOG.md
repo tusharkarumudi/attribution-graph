@@ -6,6 +6,14 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-09-24
+
+- Minimisation replaces values at token boundaries, not as bare substrings.
+  A company suffix ate every word containing it: "Inc" turned
+  "INCOMPLETE RESULT" into "min:7a31...OMPLETE RESULT" and
+  "incorporated_in" into "min:7a31...orporated_in", corrupting the report
+  wherever a value happened to be a common substring.
+
 ## [2.0.1] - 2026-09-21
 
 - Documentation, examples and test fixtures now use only placeholder data.

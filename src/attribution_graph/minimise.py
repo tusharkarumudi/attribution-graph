@@ -33,6 +33,7 @@ enforced by two independent lists is enforced by neither.
 from __future__ import annotations
 
 import hashlib
+import re
 from urllib.parse import quote, quote_plus
 
 #: Minimum length to scrub. Zero: every length is covered.
@@ -92,6 +93,11 @@ def scrub(text: str, values: set[str], salt: bytes | None) -> str:
         for form in canonical_forms(value):
             expanded[form] = d
 
+    # Token boundaries, not bare substrings. A plain replace made a company
+    # suffix eat every word containing it: "Inc" turned "INCOMPLETE RESULT" into
+    # "min:7a31…OMPLETE RESULT" and "incorporated_in" into "min:7a31…orporated_in",
+    # corrupting the report wherever a value happened to be a common substring.
     for form in sorted(expanded, key=len, reverse=True):
-        text = text.replace(form, expanded[form])
+        pattern = re.compile(rf"(?<![0-9A-Za-z]){re.escape(form)}(?![0-9A-Za-z])")
+        text = pattern.sub(expanded[form], text)
     return text
