@@ -4,6 +4,17 @@
 [![PyPI](https://img.shields.io/pypi/v/attribution-graph.svg)](https://pypi.org/project/attribution-graph/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+> **New here? Start with the suite.** One install, one command:
+>
+> ```bash
+> pip install attribution-suite
+> attribution-suite --domain example.com
+> ```
+>
+> It runs this package for you and prints who is paid for a site. Run
+> `attribution doctor` first if anything looks wrong. This README covers the
+> package itself, for people wiring it into something of their own.
+
 Ranks whether observed identifiers denote the same real-world entity, by
 **evidence strength**, with the provenance needed for independent review.
 

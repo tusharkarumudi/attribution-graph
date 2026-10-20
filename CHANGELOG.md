@@ -6,6 +6,10 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-09-27
+
+- README points first-time readers at the suite.
+
 ## [2.0.3] - 2026-09-24
 
 - Resolved entities carry the DIRECT/RESELLER label of the accounts that
