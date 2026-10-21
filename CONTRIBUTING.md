@@ -37,7 +37,8 @@ argue for a different mechanism, not just adjust a constant.
 ```bash
 git clone https://github.com/tusharkarumudi/attribution-graph
 cd attribution-graph
-pip install -e ".[dev]"
+python3 -m venv .venv && . .venv/bin/activate   # PEP 668: not optional on
+pip install -e ".[dev]"                        # Ubuntu, Debian, Fedora, Homebrew
 pytest -q
 ruff check .
 ```

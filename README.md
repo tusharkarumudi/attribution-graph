@@ -7,7 +7,7 @@
 > **New here? Start with the suite.** One install, one command:
 >
 > ```bash
-> pip install attribution-suite
+> pipx install attribution-suite        # pipx, not pip — see Install below
 > attribution-suite --domain example.com
 > ```
 >
@@ -24,9 +24,17 @@ likelihood ratio and `P(evidence | same entity)` is not modelled. Output carries
 
 Pure inference. No network I/O. Bring your own collectors.
 
+Install into a virtualenv — this is a library, imported by your own code:
+
 ```bash
+python3 -m venv .venv && . .venv/bin/activate
 pip install attribution-graph
 ```
+
+A system-wide `pip install` is refused on Ubuntu, Debian, Fedora and Homebrew
+Python with `error: externally-managed-environment` (PEP 668). That is the OS
+protecting its own Python, not a fault in this package. Do not pass
+`--break-system-packages`.
 
 ---
 

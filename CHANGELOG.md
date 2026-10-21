@@ -6,6 +6,20 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-10-20
+
+- Test fixtures, examples and changelog entries no longer carry the names,
+  domains, registry identifiers or account numbers of real third parties.
+  They were pasted in from live runs because a real case is the most
+  convenient realistic fixture there is. Replaced with fictional equivalents
+  that preserve what each test is about: token length and letter case for
+  opaque identifiers, word structure and legal-form suffixes for company
+  names.
+- Install instructions use a virtualenv, and name the PEP 668 refusal
+  (`error: externally-managed-environment`) that stops a system-wide
+  `pip install` on Ubuntu, Debian, Fedora and Homebrew Python. The README's
+  own first line was a command that cannot work on a current Ubuntu.
+
 ## [2.0.4] - 2026-09-27
 
 - README points first-time readers at the suite.
@@ -14,8 +28,8 @@ versioning follows [SemVer](https://semver.org/).
 
 - Resolved entities carry the DIRECT/RESELLER label of the accounts that
   reached them, and an entity reached ONLY through RESELLER declarations says
-  so. `openx.com,537153564,RESELLER` under a publisher's `## Undertone ##` block
-  is OpenX reselling Undertone's inventory; its legal entity was listed flat
+  so. `openx.com,900000001,RESELLER` under a publisher's `## Partner Network ##` block
+  is OpenX reselling Partner Network's inventory; its legal entity was listed flat
   beside the subject, implying a connection the ads.txt explicitly denies.
 
 ## [2.0.2] - 2026-09-24

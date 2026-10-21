@@ -100,7 +100,7 @@ def test_authoritative_registry_assertion_stands_alone():
     resolve a company to its own LEI."""
     # The collector must be an engine-recognised registry: the carve-out is
     # granted by the engine, never claimed by the claim.
-    c = _claim(Predicate.SAME_AS, IdKind.LEI, "5493001KJTIIGC8Y1R12",
+    c = _claim(Predicate.SAME_AS, IdKind.LEI, "EXAMPLELEI0000000001",
                rel=Reliability.AUTHORITATIVE, group="gleif", collector="gleif")
     a = assess([c], holder_lookup=lambda i: 1, now=NOW)
     assert a.definitional is True
@@ -203,7 +203,7 @@ def test_registry_collectors_retain_the_carve_out():
     registry = Claim(
         subject=Identifier(IdKind.ORG_NAME, "Example Media Ltd"),
         predicate=Predicate.SAME_AS,
-        object=Identifier(IdKind.LEI, "5493001KJTIIGC8Y1R12"),
+        object=Identifier(IdKind.LEI, "EXAMPLELEI0000000001"),
         collector="gleif", source_url="https://api.gleif.org/",
         reliability=Reliability.AUTHORITATIVE, correlation_group="g")
     assert is_definitional(registry)
@@ -244,7 +244,7 @@ def test_definitional_requires_positive_weight():
     c = Claim(
         subject=Identifier(IdKind.ORG_NAME, "Example Ltd"),
         predicate=Predicate.SAME_AS,
-        object=Identifier(IdKind.LEI, "5493001KJTIIGC8Y1R12"),
+        object=Identifier(IdKind.LEI, "EXAMPLELEI0000000001"),
         collector="gleif", source_url="https://api.gleif.org/",
         reliability=Reliability.AUTHORITATIVE, correlation_group="g")
     assert is_definitional(c)

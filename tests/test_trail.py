@@ -15,7 +15,7 @@ def test_steps_are_numbered_and_individually_timestamped():
 def test_citations_are_numbered_and_listed():
     t = Trail("C-1")
     n = t.cite("https://api.gleif.org/x", body_sha256="cd" * 32, status=200)
-    t.extract("LEI", "5493001KJTIIGC8Y1R12", n)
+    t.extract("LEI", "EXAMPLELEI0000000001", n)
     out = t.render()
     assert f"[{n}]" in out
     assert "https://api.gleif.org/x" in out

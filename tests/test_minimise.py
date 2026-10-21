@@ -10,17 +10,17 @@ def test_a_value_is_replaced_only_at_token_boundaries():
     from attribution_graph.minimise import scrub
 
     text = ("> ## :: INCOMPLETE RESULT ::  incorporated_in: GB  "
-            "Relabe Inc trades here")
+            "Example Adtech Inc trades here")
     out = scrub(text, {"Inc"}, b"salt")
     assert "INCOMPLETE RESULT" in out
     assert "incorporated_in" in out
-    assert "Relabe min:" in out, "the real value must still be masked"
+    assert "Example Adtech min:" in out, "the value must still be masked"
 
 
 def test_domains_and_punctuated_values_still_mask():
     from attribution_graph.minimise import scrub
 
-    out = scrub("see krediuzman.com/about and notkrediuzman.community",
-                {"krediuzman.com"}, b"salt")
+    out = scrub("see other-site.example/about and notother-site.community",
+                {"other-site.example"}, b"salt")
     assert "min:" in out
-    assert "notkrediuzman.community" in out, "a longer word must not be broken"
+    assert "notother-site.community" in out, "a longer word must not be broken"

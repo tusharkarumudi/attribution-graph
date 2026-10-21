@@ -42,7 +42,7 @@ def main() -> None:
     domain = Identifier(IdKind.DOMAIN, "scraper-site.example")
     seller = Identifier(IdKind.SELLER_ID, "pubmatic.example/156423")
     org = Identifier(IdKind.ORG_NAME, "Example Media Holdings Ltd")
-    lei = Identifier(IdKind.LEI, "5493001KJTIIGC8Y1R12")
+    lei = Identifier(IdKind.LEI, "EXAMPLELEI0000000001")
     company_no = Identifier(IdKind.COMPANY_NUMBER, "gb/09876543")
     director = Identifier(IdKind.PERSON_NAME, "Jane Q Operator")
     cdn = Identifier(IdKind.DOMAIN, "cdn-provider.example")

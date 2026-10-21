@@ -29,11 +29,11 @@ class MyCollector:
         return [Claim(
             subject=ident,
             predicate=Predicate.SAME_AS,
-            object=Identifier(IdKind.LEI, "5493001KJTIIGC8Y1R12"),
+            object=Identifier(IdKind.LEI, "EXAMPLELEI0000000001"),
             collector=self.name,
             source_url="https://...",
             reliability=Reliability.AUTHORITATIVE,
-            correlation_group="gleif|5493001KJTIIGC8Y1R12",
+            correlation_group="gleif|EXAMPLELEI0000000001",
         )]
 ```
 

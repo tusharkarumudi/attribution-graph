@@ -132,7 +132,7 @@ Corroboration is enforced by arithmetic rather than by analyst discipline.
 
 Requiring corroboration everywhere makes the system unable to accept that a
 registry's own identity assertion is true. GLEIF stating that LEI
-`5493001KJTIIGC8Y1R12` belongs to a given legal name is not evidence *about* an
+`EXAMPLELEI0000000001` belongs to a given legal name is not evidence *about* an
 identity; it is the identity. Such claims — `SAME_AS` from an authoritative
 registry — are exempt from `GROUP_CAP` and from the two-group requirement.
 

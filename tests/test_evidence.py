@@ -139,7 +139,7 @@ def test_source_attribution_lists_terms_for_sources_used():
     g = AttributionGraph(case_ref="X")
     g.add_claim(Claim(
         subject=Identifier(IdKind.ORG_NAME, "Acme"), predicate=Predicate.LEGAL_NAME,
-        object=Identifier(IdKind.LEI, "5493001KJTIIGC8Y1R12"),
+        object=Identifier(IdKind.LEI, "EXAMPLELEI0000000001"),
         collector="opencorporates", source_url="https://opencorporates.com/x"))
     out = source_attribution(g)
     assert "OpenCorporates" in out and "non-commercial" in out

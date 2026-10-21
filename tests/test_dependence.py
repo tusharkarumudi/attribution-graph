@@ -114,7 +114,7 @@ def test_genuinely_independent_classes_are_not_discounted():
     claims = [
         _claim("analytics|a", Predicate.SHARES_ANALYTICS_ID, "ga4:G-X",
                IdKind.ANALYTICS_ID),
-        _claim("gleif|x", Predicate.SAME_AS, "5493001KJTIIGC8Y1R12", IdKind.LEI),
+        _claim("gleif|x", Predicate.SAME_AS, "EXAMPLELEI0000000001", IdKind.LEI),
     ]
     a = assess(claims, lambda i: 2)
     assert a.dependence.discounted_groups == 0
