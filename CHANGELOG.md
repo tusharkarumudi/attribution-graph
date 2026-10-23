@@ -6,6 +6,15 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-10-21
+
+- `Engine.run` takes an optional `before_resolve` hook, which runs after
+  collection and before scoring with the graph in hand. That window is the
+  only place an adversarial check can act: scoring consumes claim weights, so
+  an identifier demoted afterwards has already counted in full. It is a hook
+  rather than a fixed step because the checks need a network fetcher, which
+  this package does not have and must not acquire.
+
 ## [2.0.5] - 2026-10-20
 
 - Test fixtures, examples and changelog entries no longer carry the names,

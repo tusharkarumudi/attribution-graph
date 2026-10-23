@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import heapq
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 from . import filters
@@ -197,7 +198,20 @@ class Engine:
 
     # ---- run -------------------------------------------------------------- #
 
-    async def run(self) -> ResolutionResult:
+    async def run(
+        self,
+        *,
+        before_resolve: Callable[[AttributionGraph], Awaitable[None]] | None = None,
+    ) -> ResolutionResult:
+        """Collect, then resolve.
+
+        ``before_resolve`` runs after collection and before scoring, with the
+        graph, and may change claim weights. That window is the only place an
+        adversarial check can act: scoring consumes the weights, so a planted
+        identifier demoted afterwards has already counted in full. It is a hook
+        rather than a fixed step because the checks need a network fetcher,
+        which this package does not have and must not acquire.
+        """
         self.started = time.monotonic()
         self.scope.audit(
             "run_start", seeds=self.scope.seeds,
@@ -223,6 +237,9 @@ class Engine:
             except _Budget as e:
                 self.scope.audit("budget_stop", reason=str(e))
                 break
+
+        if before_resolve is not None:
+            await before_resolve(self.graph)
 
         result = resolve(self.graph, self.scope.entity_types_allowed, index=self.index)
         self.scope.audit(
