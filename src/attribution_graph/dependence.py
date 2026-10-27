@@ -48,7 +48,6 @@ without measurement.
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -296,10 +295,3 @@ def sub_additive(values: list[float], discount: float) -> float:
         return 0.0
     ordered = sorted(values, key=abs, reverse=True)
     return ordered[0] + discount * sum(ordered[1:])
-
-
-def log_sum_within_group(values: list[float]) -> float:
-    """The existing within-group rule, for reference: max plus log(1+n)."""
-    if not values:
-        return 0.0
-    return max(values) + math.log(1 + len(values) - 1)

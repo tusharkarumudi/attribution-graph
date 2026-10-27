@@ -65,7 +65,18 @@ class FetchDecision:
         return self.allowed or self.policy is not RobotsPolicy.RESPECT
 
     def manifest_entry(self) -> dict:
+        """This decision, as the evidence manifest records it.
+
+        The manifest used to carry only a list of disallowed URLs, which drops
+        the one distinction that matters when reading it later: a URL skipped
+        because the site disallows it and a URL skipped because the machine
+        running the tool could not reach the origin look identical as bare
+        strings. `robots_directive` and `note` separate them, and `fetched`
+        states whether the decision was acted on, which differs between
+        `respect` and `record`.
+        """
         return {
+            "url": self.url,
             "policy": self.policy.value,
             "robots_directive": self.robots_directive,
             "fetched": self.should_fetch,
@@ -89,12 +100,64 @@ UNAVAILABLE = _RobotsOutcome(
     "unavailable", True,
     "robots.txt is unavailable (4xx); RFC 9309 permits crawling")
 
-#: 5xx / network failure: the resource may exist and may disallow, so the
-#: crawler must assume complete disallow (RFC 9309 §2.3.1.4).
+#: 5xx: the resource may exist and may disallow, so the crawler must assume
+#: complete disallow (RFC 9309 §2.3.1.4).
 UNREACHABLE = _RobotsOutcome(
     "unreachable", False,
-    "robots.txt is unreachable (5xx or network failure); RFC 9309 requires "
-    "assuming complete disallow until the condition resolves")
+    "robots.txt is unreachable (5xx); RFC 9309 requires assuming complete "
+    "disallow until the condition resolves")
+
+#: The request never left this machine: DNS did not resolve, a proxy refused
+#: it, or there was no route. The conservative outcome is the same, but the
+#: REASON is not a statement about the site at all, and reporting it as one
+#: sent analysts looking for a block that the site had not applied. A sandbox
+#: with an egress allowlist produces this for every host it does not permit.
+#: ...and the fetch PROCEEDS. RFC 9309 §2.3.1.4 requires complete disallow for
+#: "server or network errors" affecting robots.txt -- an origin that answered
+#: 5xx, or a network path to it that failed. It does not address the crawler's
+#: own connectivity, and the rationale does not reach it either: a request that
+#: never leaves this machine disregards no published rule and places no load on
+#: the origin. Treating it as a disallow meant one failed robots.txt in a
+#: sandbox suppressed 33 attempts that would have reported honestly, and turned
+#: a local egress problem into a sentence about the site.
+#:
+#: If the host really is gone, nothing is gained or lost: the next request
+#: fails the same way and is reported as the transport error it is.
+UNREACHABLE_LOCAL = _RobotsOutcome(
+    "unreachable_local", True,
+    "robots.txt could not be fetched FROM THIS MACHINE (the host did not "
+    "resolve, or egress was refused), so no rules were ever retrieved; this is "
+    "a local network condition, not a rule published by the site, and RFC 9309 "
+    "§2.3.1.4 does not cover it. Each retrieval is attempted and reported on "
+    "its own result")
+
+
+#: Error text that means the request never left this machine. Matched on the
+#: message because the transport raises several unrelated exception types for
+#: the same condition, and the distinction an analyst needs is "ours or
+#: theirs", not which library raised.
+_LOCAL_FAILURE_MARKERS = (
+    "name or service not known", "temporary failure in name resolution",
+    "nodename nor servname", "does not resolve", "no address associated",
+    "getaddrinfo", "proxy", "tunnel connection failed", "network is unreachable",
+    "no route to host", "connection refused",
+)
+
+
+def _is_local_failure(exc: BaseException) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(m in text for m in _LOCAL_FAILURE_MARKERS)
+
+
+def _host_unresolvable(fetcher, host: str) -> bool:
+    """Did the fetcher record this host as unreachable from here?"""
+    blocked = getattr(fetcher, "blocked", None) or ()
+    hostname = host.split(":")[0].lower()
+    for url, reason in blocked:
+        if hostname in str(url).lower() and any(
+                m in str(reason).lower() for m in _LOCAL_FAILURE_MARKERS):
+            return True
+    return False
 
 
 @dataclass
@@ -139,10 +202,12 @@ class PolicyEngine:
         outcome: object
         try:
             r = await fetcher.get(f"{scheme}://{host}/robots.txt", allow_html=True)
-        except Exception:
-            outcome = UNREACHABLE
+        except Exception as e:
+            outcome = (UNREACHABLE_LOCAL if _is_local_failure(e) else UNREACHABLE)
         else:
-            if r is None or r.status >= 500:
+            if r is None and _host_unresolvable(fetcher, host):
+                outcome = UNREACHABLE_LOCAL
+            elif r is None or r.status >= 500:
                 outcome = UNREACHABLE
             elif r.status == 200 and r.text:
                 parser = urllib.robotparser.RobotFileParser()
@@ -181,7 +246,8 @@ class PolicyEngine:
                 url, allowed, self.policy, outcome.name,
                 note=outcome.reason + (
                     "; fetched anyway under policy=record"
-                    if outcome is UNREACHABLE and self.policy is RobotsPolicy.RECORD
+                    if outcome is UNREACHABLE
+                    and self.policy is RobotsPolicy.RECORD
                     else ""))
 
         parser = outcome
@@ -210,6 +276,11 @@ class PolicyEngine:
             "disallowed_by_robots": len(disallowed),
             "fetched_despite_disallow": len(fetched_anyway),
             "skipped": len(disallowed) - len(fetched_anyway),
+            # Structured, not bare URLs. `FetchDecision.manifest_entry` was
+            # written for this block and never called, so the manifest stated
+            # that 34 URLs were disallowed without saying that every one of
+            # them was a local network failure rather than a site's policy.
+            "disallowed": [d.manifest_entry() for d in disallowed[:100]],
             "disallowed_urls": [d.url for d in disallowed[:100]],
             "statement": _statement(self.policy, len(disallowed), len(fetched_anyway)),
         }

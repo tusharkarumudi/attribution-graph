@@ -16,7 +16,6 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum, StrEnum
@@ -308,11 +307,6 @@ class AttributionGraph:
         if isinstance(claim.object, Identifier):
             self.add_identifier(claim.object)
         self.claims.append(claim)
-
-    def claims_for(self, ident: Identifier) -> Iterable[Claim]:
-        for c in self.claims:
-            if c.subject.key == ident.key or c.object_key == ident.key:
-                yield c
 
     def holders(self, ident: Identifier) -> int:
         """Distinct subjects observed carrying this identifier value.

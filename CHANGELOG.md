@@ -6,6 +6,98 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.7] - 2026-10-27
+
+### Removed -- code nothing called
+
+A reachability census over all four repositories (`scripts/find_unreachable.py`
+in attribution-suite, now run by `VERIFY.sh`) found fourteen definitions that
+nothing names. The dangerous ones were not the dead accessors:
+
+- **`_cluster_types_compatible` was a second, divergent copy of a live rule.**
+  The person/company merge check runs inline in `resolve`, keyed on
+  `TYPE_BY_KIND`. This copy hardcoded its own kind list, so the two would drift
+  -- and a divergent duplicate of a correctness rule is worse than no
+  duplicate, because the dead one is the one someone eventually "fixes".
+- `_UnreachableBudgetError` and the comment above it were left from the
+  import-time exception tuple that `_is_budget_exhaustion` replaced.
+- `log_sum_within_group` was the superseded within-group rule, kept "for
+  reference" beside `sub_additive`.
+- `AttributionGraph.claims_for` had no caller.
+
+### Wired up -- where the absence of a caller WAS the defect
+
+- **`FetchDecision.manifest_entry` was written for the evidence manifest and
+  never called.** The manifest recorded a list of disallowed URLs as bare
+  strings, which drops the only distinction that matters when reading it back:
+  a URL the site disallows and a URL the machine could not reach look
+  identical. `PolicyEngine.summary` now emits the structured entry, with the
+  directive and the reason, alongside the old list.
+- **`Claim.deliberate_obfuscation` had no reader.** A homoglyph or zero-width
+  character in an identifier -- which nobody applies by accident, and which the
+  code's own comment calls "evidence in its own right" -- reached a subsection
+  an analyst might scroll past and never the summary that gets quoted. New
+  `deliberately_obfuscated()` prefers the stored per-claim verdict, falls back
+  to recomputing, and feeds the executive summary. It also removed a `_ =
+  DELIBERATE` no-op that was papering over the unused import.
+
+### Report
+
+- The executive summary carries the egress conditions: a proxy that failed
+  open, TLS terminated by an intercepting proxy, and the vantage point when one
+  was established. A capture taken through an intercepting proxy proves what
+  the proxy served, which a reader relying on the report needs to know.
+
+- **The report now answers the question whoever reads it actually has.** Three
+  sections were added, in front of the analyst-facing detail rather than
+  instead of it:
+  - **Executive summary** -- subject, what the evidence supports, how strong,
+    and every condition that changes the reading (INCOMPLETE, selective
+    serving, hosts unreachable from this machine, demoted claims, a gravatar
+    binding). It restates the governing caveat, that bands are evidence
+    strength and the model is not calibrated, because a summary is the part
+    that gets quoted and the part that travels without its footnotes. A run
+    that found nothing says so and says plainly that it is not a failure.
+  - **Network map** -- a `mermaid` `flowchart LR` of the pivots. Built from the
+    assessed pairs and not the raw claims, so the picture cannot imply a link
+    the text declines to make; the node's shape carries its kind, the edge
+    label carries the band, and the fence carries the line that a band is not
+    a probability, because a diagram outlives the paragraph under it. Bounded
+    at 40 edges -- a map nobody can read is not evidence of anything -- and
+    written out as `network_map.mmd` as well.
+  - **Indicators** -- the observables as a table, one row each, with the
+    collector that produced it and the timestamp of first retrieval. Rows
+    whose claims were demoted are **kept** and marked: an identifier planted
+    to manufacture a link is a fact about whoever planted it. Self-published
+    values are marked too, since a value and its own assertion of provenance
+    are one source.
+- The HTML report carries all three and still loads nothing external: the
+  diagram ships as source in a `<pre>`, not as a CDN script, because the
+  report is meant to survive being emailed to someone with no network.
+- Minimisation reaches the new sections, which was worth a test of its own --
+  three sections that name identifiers were added to a document that has a
+  mode promising none are shown.
+- Mermaid labels bypass the markdown escaper. Inside a fence, `org\_name`
+  renders as the backslash, so `_mermaid_label` escapes for the diagram
+  instead and drops the kind prefix the node shape already states.
+
+- **A robots.txt that failed because of THIS machine no longer stops the
+  crawl.** RFC 9309 §2.3.1.4 requires complete disallow for "server or network
+  errors" affecting robots.txt — an origin that answered 5xx, or a path to it
+  that failed. It does not address the crawler's own connectivity, and the
+  rationale does not reach it: a request that never leaves this machine
+  disregards no published rule and places no load on the origin. One failed
+  robots.txt in a sandbox was suppressing 33 retrievals and reporting them as
+  the site's policy. 5xx from the origin is unchanged and still disallows.
+- A robots.txt that could not be fetched **because of this machine** -- the
+  host did not resolve, a proxy refused the tunnel, there was no route -- is
+  no longer reported as the site's policy. RFC 9309's complete-disallow rule
+  is for a server that answered 5xx; a local network condition is not a rule
+  published by anyone. The outcome stays conservative and the reason now says
+  which it was, because a sandbox with an egress allowlist produced 34
+  "fetch policy" blocks per run and sent analysts looking for a block the
+  site had never applied.
+
 ## [2.0.6] - 2026-10-21
 
 - `Engine.run` takes an optional `before_resolve` hook, which runs after

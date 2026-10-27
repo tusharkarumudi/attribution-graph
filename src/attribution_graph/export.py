@@ -228,7 +228,7 @@ def _obfuscation_section(graph: AttributionGraph) -> str:
     whose identifiers needed them is one someone worked to keep uncorrelated,
     and that is a finding rather than a data-quality note.
     """
-    from .obfuscation import DELIBERATE, ObfuscationLog, normalize_value
+    from .obfuscation import ObfuscationLog, normalize_value
 
     log = ObfuscationLog()
     for c in graph.claims:
@@ -247,8 +247,41 @@ def _obfuscation_section(graph: AttributionGraph) -> str:
         out += ["", "Deliberate obfuscation is evidence in its own right: "
                     "these techniques require effort and are used to avoid "
                     "correlation, not by mistake."]
-    _ = DELIBERATE
     return "\n".join(out)
+
+
+def deliberately_obfuscated(graph: AttributionGraph) -> int:
+    """How many claims carry an identifier someone worked to obscure.
+
+    Two signals exist for this and neither was read. `Claim._record_obfuscation`
+    stores a per-claim verdict at construction, reachable through
+    `Claim.deliberate_obfuscation`, but only when the collector recorded the
+    pre-normalisation value in `_raw_subject`/`_raw_object`. The report section
+    above instead recomputes from `observed_as`, which every identifier has.
+
+    So this prefers the stored verdict and falls back to recomputing, and both
+    the section and the executive summary go through it. Before this, the
+    stored verdict had no reader at all and deliberate obfuscation -- a
+    homoglyph or a zero-width character in an identifier, which nobody types by
+    accident -- reached a subsection an analyst might scroll past and never the
+    summary that gets quoted.
+    """
+    from .obfuscation import normalize_value
+
+    count = 0
+    for c in graph.claims:
+        if c.deliberate_obfuscation:
+            count += 1
+            continue
+        for ident in (c.subject, c.object):
+            if not isinstance(ident, Identifier):
+                continue
+            r = normalize_value(ident.observed_as, case_fold=False,
+                                collapse_space=True)
+            if r.deliberate:
+                count += 1
+                break
+    return count
 
 
 #: Characters that let a subject-controlled label restructure a Markdown table
@@ -284,6 +317,303 @@ def source_attribution(graph: AttributionGraph) -> str:
               "purposes. Redistribution of this report may be subject to the terms "
               "listed. Confirm current terms with each provider before publishing._"]
     return "\n".join(L)
+
+
+#: Node styling for the map, by identifier kind. Shape carries meaning so the
+#: picture is readable in black and white and by anyone who cannot distinguish
+#: the colours: the subject and the parties who get paid are not the same kind
+#: of thing as a fingerprint.
+_MAP_SHAPES: dict[str, tuple[str, str, str]] = {
+    "domain": ("[", "]", "site"),
+    "seller_id": ("[/", "/]", "payee"),
+    "org_name": ("[(", ")]", "org"),
+    "lei": ("[(", ")]", "org"),
+    "cik": ("[(", ")]", "org"),
+    "company_number": ("[(", ")]", "org"),
+    "person_name": ("((", "))", "person"),
+    "email": ("((", "))", "person"),
+    "gravatar_hash": ("((", "))", "person"),
+    "handle": ("((", "))", "person"),
+}
+_MAP_DEFAULT = ("{{", "}}", "tech")
+
+#: Edge count beyond which the picture stops being one. A map nobody can read
+#: is not evidence of anything.
+MAP_MAX_EDGES = 40
+
+
+def _mermaid_label(key: str, limit: int = 44) -> str:
+    """A node label that survives a Mermaid fence.
+
+    `_md` escapes markdown, which is right everywhere else and wrong here:
+    inside a fence `org\\_name` renders as `org\\_name`. The kind prefix is
+    dropped because the node's shape already carries it, and a label is only
+    readable if it is short.
+    """
+    value = str(key)
+    if ":" in value:
+        head, rest = value.split(":", 1)
+        if head in {k.value for k in IdKind}:
+            value = rest
+    value = value.replace('"', "'").replace("\\", "/").replace("|", "/")
+    if len(value) > limit:
+        value = value[: limit - 1] + "…"
+    return value
+
+
+def _map_node(kind: str, key: str, ids: dict) -> str:
+    if key not in ids:
+        ids[key] = f"n{len(ids)}"
+    return ids[key]
+
+
+def network_map(graph: AttributionGraph, result: ResolutionResult,
+                limit: int = MAP_MAX_EDGES) -> list[str]:
+    """A Mermaid flowchart of the pivots, strongest links first.
+
+    Built from the assessments rather than from raw claims: an edge here is a
+    link the model actually supports, labelled with its band, so the picture
+    cannot imply a conclusion the text does not make. Bands are evidence
+    strength, never probability, and the legend says so -- a diagram travels
+    further than the paragraph under it, usually into a slide.
+    """
+    ranked = [((a, b), m) for (a, b), m in
+              sorted(result.assessments.items(), key=lambda kv: -kv[1].log_odds)
+              if m.band is not Band.UNSUPPORTED]
+    if not ranked:
+        return []
+
+    shown, ids = ranked[:limit], {}
+    lines = ["## Network map", "",
+             "Nodes are identifiers, edges are supported links. Shapes: "
+             "`[site]`, `[/payee/]`, `([organisation])`, `((person))`, "
+             "`{other}`.", "",
+             "```mermaid", "flowchart LR"]
+
+    for (a, b), _asmt in shown:
+        for key in (a, b):
+            if key in ids:
+                continue
+            kind = str(key).split(":", 1)[0]
+            open_, close_, cls = _MAP_SHAPES.get(kind, _MAP_DEFAULT)
+            node = _map_node(kind, key, ids)
+            label = _mermaid_label(key)
+            lines.append(f'    {node}{open_}"{label}"{close_}:::{cls}')
+
+    for (a, b), asmt in shown:
+        style = "==>" if asmt.band is Band.STRONG_EVIDENCE else "-->"
+        lines.append(f"    {ids[a]} {style}|{asmt.band.value}| {ids[b]}")
+
+    lines += [
+        "    classDef site fill:#e8f0fe,stroke:#1a73e8,color:#102a43;",
+        "    classDef payee fill:#fff4e5,stroke:#b26a00,color:#3d2600;",
+        "    classDef org fill:#e9f7ef,stroke:#1e7b45,color:#0b3d22;",
+        "    classDef person fill:#fdecef,stroke:#b3261e,color:#410e0b;",
+        "    classDef tech fill:#f2f2f7,stroke:#5f6368,color:#202124;",
+        "```", "",
+    ]
+    if len(ranked) > limit:
+        lines += [f"_{len(ranked) - limit} further supported link(s) are in the "
+                  "assessments table rather than the map; a diagram stops being "
+                  "readable long before the data runs out._", ""]
+    lines += ["Thick edges are STRONG_EVIDENCE. A band orders evidence "
+              "strength and is not a probability — the model is not "
+              "calibrated.", ""]
+    return lines
+
+
+#: Observable kinds worth handing to a SIEM or a takedown notice, with the
+#: label each one is usually called by outside this toolkit.
+_IOC_KINDS: dict[str, str] = {
+    "domain": "domain",
+    "ip": "ipv4-addr",
+    "email": "email-addr",
+    "analytics_id": "analytics-id",
+    "seller_id": "adtech-seller-id",
+    "service_id": "service-id",
+    "gravatar_hash": "gravatar-md5",
+    "cert_sha256": "x509-sha256",
+    "favicon_mmh3": "favicon-mmh3",
+    "pgp_fpr": "pgp-fingerprint",
+    "ssh_fpr": "ssh-fingerprint",
+    "asn": "asn",
+    "url": "url",
+    "handle": "user-account",
+}
+
+#: Rows beyond which the table is a data dump rather than a table.
+IOC_MAX_ROWS = 120
+
+
+def ioc_table(graph: AttributionGraph) -> list[str]:
+    """Observables, with where each came from and what it is worth.
+
+    An IOC table without provenance is a list of strings somebody has to take
+    on faith, so every row carries the collector and the retrieval it came
+    from, and the ones a subject published about itself are marked -- those are
+    the rows an operator can choose to be true.
+    """
+    rows: list[tuple[str, str, str, str, str, int]] = []
+    for ident in graph.identifiers.values():
+        label = _IOC_KINDS.get(ident.kind.value)
+        if not label:
+            continue
+        supporting = [c for c in graph.claims
+                      if ident.key in (getattr(c.subject, "key", ""),
+                                       getattr(c.object, "key", ""))]
+        if not supporting:
+            continue
+        collectors = sorted({c.collector for c in supporting if c.collector})
+        first = min((c.retrieved_at for c in supporting), default=None)
+        demoted = all(c.weight <= 0.0 for c in supporting)
+        self_pub = all(
+            str(c.correlation_group or "").split("|")[0]
+            in ("imprint", "dns_txt", "ownerdomain", "surface")
+            for c in supporting)
+        note = []
+        if demoted:
+            note.append("DEMOTED: failed a planted-identifier check")
+        if self_pub:
+            note.append("self-published: the subject's own statement")
+        rows.append((label, ident.value,
+                     ", ".join(collectors[:3]) or "—",
+                     first.date().isoformat() if first else "—",
+                     "; ".join(note) or "—",
+                     len(supporting)))
+
+    if not rows:
+        return []
+
+    rows.sort(key=lambda r: (r[0], r[1]))
+    lines = ["## Indicators", "",
+             "| Type | Value | First retrieved | Claims | Collector(s) | Note |",
+             "|---|---|---|---|---|---|"]
+    for label, value, collectors, first, note, n in rows[:IOC_MAX_ROWS]:
+        lines.append(f"| {label} | `{_md(value, 120)}` | {first} | {n} | "
+                     f"{collectors} | {note} |")
+    if len(rows) > IOC_MAX_ROWS:
+        lines.append(f"| … | _{len(rows) - IOC_MAX_ROWS} further observable(s) "
+                     "in `investigation_graph.json`_ | | | | |")
+    lines += ["",
+              "Every row is an observation with provenance, not a verdict. A "
+              "DEMOTED row is kept deliberately: an identifier placed to "
+              "manufacture a link is a fact about whoever placed it.", ""]
+    return lines
+
+
+def executive_summary(graph: AttributionGraph, result: ResolutionResult,
+                      scope: CaseScope, status: dict | None) -> list[str]:
+    """What was asked, what came back, and how far it can be relied on.
+
+    First section, plain sentences, no table. Written because the people who
+    decide what to do next read one section and the detail below it answers
+    questions they have not asked yet.
+    """
+    status = status or {}
+    seeds = ", ".join(str(s) for s in (getattr(scope, "seeds", []) or [])) or "—"
+
+    ranked = [((a, b), m) for (a, b), m in
+              sorted(result.assessments.items(), key=lambda kv: -kv[1].log_odds)
+              if m.band in (Band.STRONG_EVIDENCE, Band.MODERATE_EVIDENCE)]
+    named = [e for e in sorted(graph.entities.values(), key=lambda x: -x.log_odds)
+             if len(e.identifiers) > 1]
+
+    lines = ["## Executive summary", ""]
+    lines.append(f"**Subject.** {_md(seeds, 160)}")
+    lines.append("")
+
+    if named:
+        top = named[0]
+        lines.append(
+            f"**What the evidence supports.** {_md(top.best_label)} "
+            f"({top.type.value}), resolved from {len(top.identifiers)} "
+            f"identifiers. {len(named) - 1} further entit"
+            f"{'y was' if len(named) == 2 else 'ies were'} resolved."
+            if len(named) > 1 else
+            f"**What the evidence supports.** {_md(top.best_label)} "
+            f"({top.type.value}), resolved from {len(top.identifiers)} "
+            f"identifiers.")
+    elif ranked:
+        (a, b), asmt = ranked[0]
+        lines.append(
+            f"**What the evidence supports.** The strongest supported link is "
+            f"`{_md(a)}` to `{_md(b)}` at {asmt.band.value}. No entity "
+            "resolved above the merge threshold, so there is no named party "
+            "to report.")
+    else:
+        lines.append(
+            "**What the evidence supports.** Nothing above the reporting "
+            "threshold. That is a result, not a failure: a site with no "
+            "advertising declarations publishes no payee.")
+    lines.append("")
+
+    strong = sum(1 for _, m in ranked if m.band is Band.STRONG_EVIDENCE)
+    lines.append(
+        f"**How strong.** {strong} link(s) at STRONG_EVIDENCE and "
+        f"{len(ranked) - strong} at MODERATE_EVIDENCE, from "
+        f"{len(graph.claims)} claims over {len(graph.identifiers)} "
+        "identifiers. Bands order evidence strength; they are not "
+        "probabilities, and the model is not calibrated.")
+    lines.append("")
+
+    caveats: list[str] = []
+    if status.get("result_valid") is False:
+        caveats.append("the result is **INVALID** — collectors failed in ways "
+                       "that are defects, so the evidence set is missing "
+                       "pieces in an unknown way and the findings should not "
+                       "be used")
+    if status.get("result_complete") is False:
+        caveats.append("the result is **INCOMPLETE**: an absence below may "
+                       "mean 'could not be checked' rather than 'checked and "
+                       "not found'")
+    if status.get("ads_txt_consistency", "").startswith("DIFFERENT"):
+        caveats.append("**the ads.txt declaration was not the same for every "
+                       "retrieval**, so the payee below is the copy this tool "
+                       "was shown")
+    if status.get("hosts_unreachable"):
+        caveats.append(f"{status['hosts_unreachable']} host(s) could not be "
+                       "reached from the machine that ran this, which is an "
+                       "environment condition rather than anything about "
+                       "those sites")
+    if status.get("adversarial_demoted"):
+        caveats.append(f"{status['adversarial_demoted']} claim(s) were demoted "
+                       "to weight 0 by the planted-identifier checks and kept "
+                       "in the record")
+    if status.get("gravatar_links"):
+        caveats.append(f"{status['gravatar_links']} email(s) were bound to an "
+                       "avatar hash by computation; that shows the page "
+                       "displays the address's avatar, not that its operator "
+                       "controls the address")
+    if status.get("egress_failed_open"):
+        caveats.append("**the configured proxy was not carrying this run's "
+                       "traffic** — the preflight found a direct request "
+                       "reporting the same address, so every capture here was "
+                       "taken from this machine, not the declared exit")
+    elif status.get("egress_vantage"):
+        caveats.append(f"captures were taken through a declared egress, "
+                       f"apparent source `{_md(str(status['egress_vantage']), 48)}` "
+                       "— not this machine's own connection")
+    if status.get("tls_intercepted"):
+        caveats.append("**TLS was intercepted** by the proxy this ran behind, "
+                       "so a capture here proves what that proxy served rather "
+                       "than what the origin served")
+    obscured = deliberately_obfuscated(graph)
+    if obscured:
+        caveats.append(f"{obscured} claim(s) carry an identifier that had to be "
+                       "normalised by a **deliberate** technique — a homoglyph, "
+                       "a zero-width character, a bidi override — which nobody "
+                       "applies by accident; see Obfuscation below")
+    if any(len(e.identifiers) > 1 and e.type.value.lower() in ("person", "persona")
+           for e in graph.entities.values()):
+        caveats.append("a conclusion about a natural person is a **lead** "
+                       "until a statutory register corroborates it")
+
+    lines.append("**What to read with care.**")
+    lines.append("")
+    lines += [f"- {c}" for c in (caveats or
+                                 ["nothing beyond the calibration caveat above"])]
+    lines.append("")
+    return lines
 
 
 def _status_banner(status: dict | None) -> list[str]:
@@ -357,9 +687,10 @@ def report(
         "has not been calibrated. Findings below MODERATE_EVIDENCE are leads, "
         "not conclusions, and single-source links are capped at WEAK by design.",
         "",
-        "## Resolved entities",
-        "",
     ]
+    L += executive_summary(graph, result, scope, status)
+    L += network_map(graph, result)
+    L += ["## Resolved entities", ""]
 
     rels = _account_relationships(graph)
     for e in sorted(graph.entities.values(), key=lambda x: -x.log_odds):
@@ -407,6 +738,7 @@ def report(
         for a, b, why in result.rejected[:50]:
             L.append(f"- `{a}` <-> `{b}` - {why}")
 
+    L += ioc_table(graph)
     L += ["", "## Provenance", "",
           "Every claim carries collector, source URL, retrieval time and "
           "correlation group in `investigation_graph.json`. Preserved response "
@@ -455,6 +787,17 @@ def write_all(
          "\n".join(json.dumps(e) for e in to_ftm(graph, salt=salt)))
 
     emit("graph.cypher", to_cypher(graph, salt=salt))
+
+    # The diagram as its own file. The HTML report is deliberately JS-free and
+    # emailable, so it cannot render Mermaid without a CDN script -- and a
+    # report that phones out to a CDN is not one a security team will forward.
+    # The markdown fence renders in GitHub, GitLab, VS Code and Obsidian; this
+    # file covers everything else.
+    fence = network_map(graph, result)
+    if fence:
+        body = "\n".join(fence)
+        src = body.split("```mermaid", 1)[1].split("```", 1)[0].strip()
+        emit("network_map.mmd", src + "\n")
 
     emit("attribution_report.md",
          report(graph, result, scope, show_scores=show_scores, trail=trail,
@@ -528,6 +871,27 @@ def _bar(log_odds: float) -> float:
     return min(100.0, max(0.0, log_odds / _NATS_CEILING * 100.0))
 
 
+def _map_source(graph: AttributionGraph, result: ResolutionResult) -> str:
+    """Just the Mermaid, without the markdown fence around it."""
+    fence = network_map(graph, result)
+    if not fence:
+        return ""
+    body = "\n".join(fence)
+    if "```mermaid" not in body:
+        return ""
+    return body.split("```mermaid", 1)[1].split("```", 1)[0].strip()
+
+
+def _html_inline(text: str) -> str:
+    """Markdown bold and code spans to HTML, everything else escaped."""
+    import re
+    from html import escape
+
+    out = escape(text)
+    out = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+    return re.sub(r"`(.+?)`", r"<code>\1</code>", out)
+
+
 def to_html(graph: AttributionGraph, result: ResolutionResult, scope: CaseScope,
             *, show_scores: bool = True,
     salt: bytes | None = None,
@@ -570,8 +934,52 @@ def to_html(graph: AttributionGraph, result: ResolutionResult, scope: CaseScope,
         "capped at <span class='band WEAK'>WEAK</span> by design, however strong the "
         "underlying observation. Selectivity counts drive every score — if this run "
         "used a per-case index rather than a corpus, the figures are upper bounds.</div>",
-        "<h2>Resolved entities</h2>",
     ]
+
+    # The summary a decision-maker reads, and the observables an analyst
+    # copies out. Rendered from the same functions as the markdown so the two
+    # documents cannot disagree.
+    from html import escape as _esc
+
+    summary_md = executive_summary(graph, result, scope, status)
+    if summary_md:
+        p.append("<h2>Executive summary</h2>")
+        for line in summary_md[2:]:
+            if not line.strip():
+                continue
+            if line.startswith("- "):
+                p.append(f"<p class=meta>&bull; {_html_inline(line[2:])}</p>")
+            else:
+                p.append(f"<p>{_html_inline(line)}</p>")
+
+    if fence_src := _map_source(graph, result):
+        p.append("<h2>Network map</h2>")
+        p.append("<p class=meta>Mermaid source, also written as "
+                 "<code>network_map.mmd</code>. This report carries no "
+                 "scripts and loads nothing, so it cannot draw the diagram "
+                 "itself; paste the block into any Mermaid renderer.</p>")
+        p.append(f"<pre><code>{_esc(fence_src)}</code></pre>")
+
+    rows = ioc_table(graph)
+    if rows:
+        p.append("<h2>Indicators</h2>")
+        p.append("<table><thead><tr><th>Type<th>Value<th>First retrieved"
+                 "<th>Claims<th>Collector(s)<th>Note</tr></thead><tbody>")
+        for line in rows[4:]:
+            if not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) != 6:
+                continue
+            p.append("<tr>" + "".join(f"<td>{_html_inline(c)}"
+                                      for c in cells) + "</tr>")
+        p.append("</tbody></table>")
+        p.append("<p class=meta>Every row is an observation with provenance, "
+                 "not a verdict. A DEMOTED row is kept deliberately: an "
+                 "identifier placed to manufacture a link is a fact about "
+                 "whoever placed it.</p>")
+
+    p.append("<h2>Resolved entities</h2>")
 
     multi = [e for e in graph.entities.values() if len(e.identifiers) > 1]
     if not multi:

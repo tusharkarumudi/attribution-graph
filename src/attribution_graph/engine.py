@@ -69,16 +69,6 @@ OPERATIONAL_FAILURES: tuple[type[BaseException], ...] = (
 )
 
 
-class _UnreachableBudgetError(Exception):
-    """Placeholder so `except` always has a type when the transport package is
-    absent. Never raised."""
-
-
-#: Exceptions meaning "the declared limit was reached", not "something broke".
-#: Resolved by name so the inference core keeps no dependency on the transport
-#: package; anything unresolvable simply never matches.
-
-
 def _is_budget_exhaustion(exc: BaseException) -> bool:
     """Whether an exception means "the declared limit was reached".
 

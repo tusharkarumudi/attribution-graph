@@ -153,26 +153,6 @@ class ResolutionResult:
     rejected: list[tuple[str, str, str]] = field(default_factory=list)
 
 
-def _cluster_types_compatible(dsu, a_key: str, b_key: str,
-                              kinds: dict[str, IdKind]) -> bool:
-    """Whether merging two clusters keeps every type constraint intact.
-
-    A person and a company are not the same entity. That was checked on the
-    candidate pair's two endpoints only, so A(person)~B, B~C(company) merged
-    transitively into a cluster containing both -- the same shape as the
-    must-not-link violation, and the same fix: compare whole clusters before
-    joining, not the two identifiers that happen to be in hand.
-    """
-    from .model import IdKind
-
-    person = {IdKind.PERSON_NAME}
-    company = {IdKind.ORG_NAME, IdKind.LEI, IdKind.COMPANY_NUMBER, IdKind.CIK}
-
-    merged = {kinds.get(k) for k in dsu.members(a_key)} | \
-             {kinds.get(k) for k in dsu.members(b_key)}
-    return not (merged & person and merged & company)
-
-
 def resolve(
     graph: AttributionGraph,
     allowed_types: set[EntityType],
