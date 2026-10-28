@@ -557,6 +557,17 @@ def executive_summary(graph: AttributionGraph, result: ResolutionResult,
             "rests on a single source — most often the site's own ads.txt, "
             "which is self-published — and a second independent source is "
             "what would raise it. It does not mean nothing is there.")
+    elif status.get("documents_rejected"):
+        # Never offer an absence here. A supplied document that is not the
+        # document means nothing was read, and "a site with no advertising
+        # declarations publishes no payee" about a site with 185 of them is
+        # the worst sentence this report can produce.
+        n = status["documents_rejected"]
+        lines.append(
+            f"**What the evidence supports.** Nothing, and this is not a "
+            f"finding about the subject: {n} supplied document(s) were not the "
+            "documents they were named after, so the files that would carry "
+            "the answer were never read. Fetch them again, byte for byte.")
     else:
         lines.append(
             "**What the evidence supports.** Nothing was collected at all. If "
