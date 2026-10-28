@@ -107,13 +107,32 @@ def test_an_invalid_result_says_do_not_use_it(world):
     assert "should not be used" in text
 
 
-def test_a_run_that_found_nothing_says_so_without_apologising(world):
+def test_a_run_that_collected_nothing_says_so_without_apologising(world):
     _tmp, scope, _g, _res = world
     empty = AttributionGraph(case_ref="REP")
     text = "\n".join(executive_summary(empty, resolve(empty, {EntityType.COMPANY}),
                                        scope, {}))
-    assert "Nothing above the reporting threshold" in text
-    assert "not a failure" in text
+    assert "Nothing was collected at all" in text
+    assert "rather than a failure" in text
+    assert "blocked" in text, "an empty run is usually blocked retrievals"
+
+
+def test_claims_below_the_band_are_not_described_as_no_declarations(world):
+    """The summary used to say "a site with no advertising declarations
+    publishes no payee" whenever nothing reached a band -- including when the
+    declarations had been read and the links were merely single-source. A
+    reader seeing a payee on the network map directly above that sentence has
+    every reason to distrust the rest of the report."""
+    _tmp, scope, _g, _res = world
+    g = AttributionGraph(case_ref="REP")
+    _claim(g, "viewer-site.example", IdKind.DOMAIN, SELLER, IdKind.SELLER_ID,
+           "ads_txt", "ads_txt|v")          # one source only
+    res = resolve(g, {EntityType.COMPANY})
+    text = "\n".join(executive_summary(g, res, scope, {}))
+    assert "no advertising declarations" not in text
+    assert "Declarations were read" in text
+    assert "single source" in text
+    assert "does not mean nothing is there" in text
 
 
 # ---- network map ----------------------------------------------------------- #

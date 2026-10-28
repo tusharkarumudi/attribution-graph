@@ -540,11 +540,29 @@ def executive_summary(graph: AttributionGraph, result: ResolutionResult,
             f"`{_md(a)}` to `{_md(b)}` at {asmt.band.value}. No entity "
             "resolved above the merge threshold, so there is no named party "
             "to report.")
+    elif graph.claims:
+        # Claims were collected; none reached a reportable band. Saying "a
+        # site with no advertising declarations publishes no payee" here was
+        # wrong and misleading: the declarations were read, and what stopped
+        # the finding was corroboration, not absence. A reader seeing a payee
+        # on the network map above that sentence has every reason to distrust
+        # the whole report.
+        best = max((m for _p, m in result.assessments.items()),
+                   key=lambda m: m.log_odds, default=None)
+        band = f" The strongest is {best.band.value}." if best is not None else ""
+        lines.append(
+            f"**What the evidence supports.** Declarations were read and "
+            f"{len(graph.claims)} claim(s) collected, but no link reached a "
+            f"reportable band.{band} That usually means every link so far "
+            "rests on a single source — most often the site's own ads.txt, "
+            "which is self-published — and a second independent source is "
+            "what would raise it. It does not mean nothing is there.")
     else:
         lines.append(
-            "**What the evidence supports.** Nothing above the reporting "
-            "threshold. That is a result, not a failure: a site with no "
-            "advertising declarations publishes no payee.")
+            "**What the evidence supports.** Nothing was collected at all. If "
+            "retrievals were blocked, that is why; otherwise a site with no "
+            "advertising declarations publishes no payee, which is a result "
+            "rather than a failure.")
     lines.append("")
 
     strong = sum(1 for _, m in ranked if m.band is Band.STRONG_EVIDENCE)

@@ -17,8 +17,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .model import EntityType
 
 
@@ -232,6 +230,13 @@ class CaseScope:
 
     @classmethod
     def load(cls, path: str | Path) -> CaseScope:
+        # Imported here rather than at module scope. PyYAML is needed by
+        # this one classmethod, and importing it at the top made the whole
+        # package unimportable wherever PyYAML is absent -- which includes a
+        # chat sandbox that forbids installing anything, the environment the
+        # offline bundle exists for. A CaseScope built in Python needs no YAML.
+        import yaml
+
         raw = yaml.safe_load(Path(path).read_text()) or {}
         cls._validate(raw or {})
         if not isinstance(raw, dict):

@@ -6,6 +6,25 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.8] - 2026-10-27
+
+Everything else in this release was published as 2.0.7. These two changes
+landed after that tag, so they need a number of their own -- PyPI does not
+allow re-uploading a version, and quietly shipping different code under the
+same number is how a bug report becomes unreproducible.
+
+- **The executive summary no longer says "a site with no advertising
+  declarations publishes no payee" when the declarations were read.** It said
+  that whenever nothing reached a reportable band, including when the file had
+  been parsed and every link was merely single-source -- directly above a
+  network map showing a payee. It now distinguishes "nothing was collected at
+  all" from "collected, but no link reached a band", and says what would raise
+  one: a second independent source.
+- `CaseScope.load` imports PyYAML lazily. A module-scope import for one
+  classmethod made the whole package unimportable wherever PyYAML is absent,
+  which includes a chat sandbox that cannot install anything. A CaseScope
+  built in Python needs no YAML at all.
+
 ## [2.0.7] - 2026-10-27
 
 ### Removed -- code nothing called
