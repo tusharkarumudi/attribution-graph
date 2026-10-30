@@ -37,11 +37,23 @@ def _has_browser():
     return available_renderer() is not None
 
 
-# Use the declared marker so default `addopts` actually excludes these. A
-# skipif alias still collects them, so the "deterministic default suite" was not
-# isolated from browser prerequisites -- five failures on a machine with the
-# playwright package but no Chromium.
-browser_only = pytest.mark.browser
+# Two guards, because they answer two different questions.
+#
+# The `browser` marker is what the default `addopts` excludes, which is how the
+# deterministic suite stays isolated from browser prerequisites; a lone skipif
+# alias does not do that, since skipped tests are still collected and once cost
+# five failures on a machine that had the playwright package but no Chromium.
+#
+# The skipif is for the run that asks for these ON PURPOSE (`-m browser`). On a
+# machine with no renderer at all, "there is no Chromium here" is a fact about
+# the machine, not a defect in the code under test, and reporting it as five
+# failures buries any real one in the same output.
+def browser_only(fn):
+    return pytest.mark.browser(
+        pytest.mark.skipif(
+            not _has_browser(),
+            reason="no renderer: pip install playwright && playwright install "
+                   "chromium, or apt-install chromium")(fn))
 
 
 # ---- degradation ----------------------------------------------------------- #
@@ -112,10 +124,14 @@ def test_records_the_page_title_and_viewport(tmp_path, page):
     assert s.viewport == "800x600"
 
 
-@browser_only
 def test_parent_body_hash_is_caller_declared_not_verified(tmp_path, page):
     """This is a KNOWN LIMITATION, asserted so it cannot be mistaken for a
     guarantee.
+
+    Deliberately NOT browser-marked. Every assertion below holds whether a
+    renderer ran or not -- that is the point, since the field is copied from the
+    caller either way -- and a test that documents a limitation is the last one
+    that should disappear on a machine without Chromium.
 
     The previous test passed "deadbeef" and checked it was copied, which proved
     only that an assignment happened. Playwright navigates the live URL

@@ -6,6 +6,20 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
+Tests only -- no shipped code changed, so there is nothing here to release.
+
+- The five browser-marked screenshot tests now **skip** rather than fail when
+  the machine has no renderer. The `browser` marker is what keeps them out of
+  the default suite; it does not make "there is no Chromium here" a defect in
+  the code under test, and five failures from one missing browser bury any real
+  one in the same output. Verified both ways: they skip without a renderer and
+  all five pass against a real Chromium.
+- `test_parent_body_hash_is_caller_declared_not_verified` is no longer
+  browser-marked. Every assertion in it holds whether a renderer ran or not --
+  that is its point, since the field is copied from the caller either way --
+  and a test that documents a known limitation is the last one that should
+  disappear on a machine without a browser.
+
 ## [2.0.8] - 2026-10-27
 
 Everything else in this release was published as 2.0.7. These two changes
