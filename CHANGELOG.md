@@ -6,7 +6,18 @@ versioning follows [SemVer](https://semver.org/).
 
 ## [Unreleased]
 
-Tests only -- no shipped code changed, so there is nothing here to release.
+## [2.0.9] - 2026-10-30
+
+**No change to the importable code.** Every `.py` file in this wheel is
+byte-identical to the 2.0.8 wheel; the local build was verified against
+the one PyPI was serving, file by file, before deciding to cut this at all.
+
+It exists for the sdist. Tests ship in the source distribution, and 2.0.8's
+copy of `test_screenshot.py` fails five times on a machine with no Chromium
+instead of skipping -- so anyone building from source, a distribution packager
+or a `--no-binary` CI job, met five failures caused by their environment rather
+than by this package. PyPI does not accept a re-upload, so correcting a shipped
+test file means a version number.
 
 - The five browser-marked screenshot tests now **skip** rather than fail when
   the machine has no renderer. The `browser` marker is what keeps them out of
